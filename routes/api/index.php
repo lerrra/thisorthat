@@ -9,15 +9,15 @@
 
 require_once realpath(__DIR__ . "/../../config/settings.php");
 
-require_once ABSPATH . $config['paths']['hint'];   
-require_once ABSPATH . $config['paths']['utf8'];   
-require_once ABSPATH . $config['paths']['censure'];  
-require_once ABSPATH . $config['paths']['core']; 
+require_once ABSPATH . $config['paths']['hint'];
+require_once ABSPATH . $config['paths']['utf8'];
+require_once ABSPATH . $config['paths']['censure'];
+require_once ABSPATH . $config['paths']['core'];
 
 class API {
 
 	protected $_core = null;
-	protected $_conf = null; 
+	protected $_conf = null;
 
 	function __construct($config) {
 		$this->_conf = $config;
@@ -26,7 +26,7 @@ class API {
 
 	private function _add_error($atts) {
 		throw new Exception("Невозможно добавить вопрос. Обновите приложение", 500);
-	}             
+	}
 
 	/**
 	 * Request: /items/get/[:count]
@@ -61,7 +61,7 @@ class API {
 			return $items;
 
 		throw new Exception("Something went wrong", 400);
-	} 
+	}
 
  	/**
 	 * Request: /items/show/:ids
@@ -75,13 +75,13 @@ class API {
 		$user = $this->authorization(false);
 
 		if(!isset($atts[2]))
-			throw new Exception("Items id do not match", 400); 
+			throw new Exception("Items id do not match", 400);
 
 		if(!$items = $_->attribute($atts, 2, '^[\d,]+$'))
-			throw new Exception("Wrong items id format", 400); 
-		
+			throw new Exception("Wrong items id format", 400);
+
 		return $_->show_items($user, $items);
-	} 
+	}
 
 	/**
 	 * Request: /items/add/
@@ -102,10 +102,10 @@ class API {
 		if(!$return = $_->add_items($user, $items))
 			throw new Exception("Items array wrong format", 400);
 
-		return array('items' => $return); 
+		return array('items' => $return);
 	}
 
- 
+
 	/**
 	 * Request: /users/add/
 	 * Method: POST
@@ -146,6 +146,26 @@ class API {
 			throw new Exception("Views array required", 400);
 
 		return $this->success("Completed successfully", 202);
+	}
+
+	/**
+	 * Request: /comments/show/:ids
+	 * Data: [id] => %i [item id]
+	 * Method: GET
+	 * Answer: [%i] => array('text' => %s, 'user' => %i, 'parent' => %i)
+	**/
+	private function _show_comments($atts) {
+		$_ = $this->_core;
+
+		$user = $this->authorization(false);
+
+		if(!isset($atts[2]))
+			throw new Exception("Item id does not match", 400);
+
+		if(!$item = $_->attribute($atts, 2, '^[\d]+$'))
+			throw new Exception("Wrong item id format", 400);
+
+		return $_->show_comments($user, $item);
 	}
 
 	protected function authorization($required = true) {
@@ -226,7 +246,7 @@ class API {
 	public function response($result) {
 		return json_encode($result);
 	}
-} 
+}
 
 
 {
@@ -235,12 +255,13 @@ class API {
 			'_get_items' => '^/items/get/?[\d]*/?',
  			'_show_items' => '^/items/show/[\d,]+/?',
   			'_self_items' => '^/items/self/?',
+			'_show_comments' => '^/comments/show/[\d]+/?',
 		),
 		'POST' => array(
+			'_add_error' => '^/items/error/?$',
 			'_add_views' => '^/views/add/?$',
 			'_add_items' => '^/items/add/?$',
 			'_add_user' => '^/users/add/?$',
- 			'_add_error' => '^/items/error/?$' 
 		)
 	);
 

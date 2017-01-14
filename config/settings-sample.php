@@ -10,15 +10,15 @@
 		),
 		"urls" => array(
 			"https" => "https://thisorthat.ru",
- 			"http" => "http://thisorthat.ru", 
+ 			"http" => "http://thisorthat.ru",
 			"api" => "/api"
-		), 
+		),
 		"paths" => array(
-			"core" => "/application/classes/core.class.php",
- 			"db" => "/application/classes/db.class.php",
-   			"hint" => "/application/classes/hint.class.php", 
-  			"utf8" => "/application/classes/utf8.class.php", 
-  			"censure" => "/application/classes/censure.class.php" 
+			"core" => "/application/core.class.php",
+ 			"db" => "/application/db.class.php",
+   			"hint" => "/application/hint.class.php",
+  			"utf8" => "/application/utf8.class.php",
+  			"censure" => "/application/censure.class.php"
 		)
 	);
 

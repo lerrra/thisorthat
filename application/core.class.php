@@ -55,14 +55,14 @@ class Core {
 				return array_merge($valid, array('approve' => 2, 'reason' => 'Подобный вопрос уже есть в нашей базе'));
 
 			if(Text_Censure::parse("{$valid['left_text']} {$valid['right_text']}") !== false)
-				return array_merge($valid, array('approve' => 2, 'reason' => 'Наш робот решил, что в вопросе используется обсценная лексика'));  
+				return array_merge($valid, array('approve' => 2, 'reason' => 'Наш робот решил, что в вопросе используется обсценная лексика'));
 
-			return array_merge($valid, array('approve' => 0, 'reason' => '')); 
+			return array_merge($valid, array('approve' => 0, 'reason' => ''));
 
 		}
 		catch(DBException $e) {
 			throw new CoreException($e->getMessage(), 0);
-		}     
+		}
 	}
 
 	private function _add_new_question($user, $data) {
@@ -95,7 +95,7 @@ class Core {
 		$items = $this->_normilize_array($items);
 
 		return array("items" => array_keys($items));
-	}              
+	}
 
 	private function _show_items($ids) {
 		try{
@@ -118,14 +118,14 @@ class Core {
 			throw new CoreException($e->getMessage(), 0);
 		}
 
-		return $this->_normilize_array($items);  
+		return $this->_normilize_array($items);
 	}
 
 	private function _get_random_items($count) {
 		try{
 			$db = $this->_db;
 
-			$query = "SELECT it.id, it.left_text, it.right_text, it.approve as moderate, 
+			$query = "SELECT it.id, it.left_text, it.right_text, it.approve as moderate,
 				IFNULL(SUM(vote = 'left'), 0) left_vote,
 				IFNULL(SUM(vote = 'right'), 0) right_vote
 				FROM (
@@ -136,7 +136,7 @@ class Core {
 				) AS it
 				LEFT JOIN view ON it.id = view.item
 				GROUP BY it.id
-				ORDER BY RAND()";  
+				ORDER BY RAND()";
 
 			$items = $db->select($query);
 		}
@@ -151,7 +151,7 @@ class Core {
 		try{
 			$db = $this->_db;
 
-			$query = "SELECT it.id, it.left_text, it.right_text, it.approve as moderate, 
+			$query = "SELECT it.id, it.left_text, it.right_text, it.approve as moderate,
 				IFNULL(SUM(vote = 'left'), 0) left_vote,
 				IFNULL(SUM(vote = 'right'), 0) right_vote
 				FROM (
@@ -160,20 +160,35 @@ class Core {
 					LEFT JOIN view AS vi
 					ON (iv.id = vi.item AND vi.user = ?)
 					WHERE (vi.id IS NULL AND iv.approve != 2)
-					ORDER BY RAND() LIMIT " . (int)$count. " 
+					ORDER BY RAND() LIMIT " . (int) $count. "
 				) AS it
 
 				LEFT JOIN view ON it.id = view.item
 				GROUP BY it.id
 				ORDER BY RAND()";
 
-			$items = $db->select($query, array((int)$user));
+			$items = $db->select($query, array((int) $user));
 		}
 		catch(DBException $e) {
 			throw new CoreException($e->getMessage(), 0);
 		}
 
 		return $this->_normilize_array($items);
+	}
+
+	private function _show_comments($item) {
+		try{
+			$db = $this->_db;
+
+			$query = "SELECT id, item, user, `text`, parent FROM comment WHERE item = ?";
+
+			$comments = $db->select($query, array((int) $item));
+		}
+		catch(DBException $e) {
+			throw new CoreException($e->getMessage(), 0);
+		}
+
+		return $this->_normilize_array($comments);
 	}
 
 	private function _add_new_user($data) {
@@ -225,11 +240,15 @@ class Core {
 		$ids = array_filter($ids, 'is_numeric');
 
 		return $this->_show_items($ids);
-	} 
+	}
+
+ 	public function show_comments($user, $item) {
+		return $this->_show_comments($item);
+	}
 
  	public function self_items($user) {
 		return $this->_self_items($user);
-	}  
+	}
 
 	public function add_items($user, $data, $client = null) {
 		$valid = array('left_text' => '', 'right_text' => '', 'paid' => 0);
@@ -243,7 +262,7 @@ class Core {
 			foreach($array as $key => $q) {
 
 				if(!array_key_exists($key, $valid))
-					return false; 
+					return false;
 
 				if($key === 'paid') {
 					$valid[$key] = (int)$q;
@@ -255,15 +274,15 @@ class Core {
 					return false;
 
 				$valid[$key] = $q;
-			} 
+			}
 
 			$valid = $this->_check_question($valid);
 
 			$return[] = $this->_add_new_question($user, $valid);
 		}
-	
+
 		if(empty($return))
-			return false; 
+			return false;
 
 		return $return;
 	}
