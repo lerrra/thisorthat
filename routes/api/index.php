@@ -105,7 +105,6 @@ class API {
 		return array('items' => $return);
 	}
 
-
 	/**
 	 * Request: /users/add/
 	 * Method: POST
@@ -166,6 +165,28 @@ class API {
 			throw new Exception("Wrong item id format", 400);
 
 		return $_->show_comments($user, $item);
+	}
+
+ 	/**
+	 * Request: /comments/add/
+	 * Method: POST
+	 * Data: [comments] => %array
+	 * Answer: [status] => %i, [description] => %s
+	**/
+	private function _add_comments($atts) {
+		$_ = $this->_core;
+
+		$raw = $_->dataset();
+
+		if(!$comments = $_->attribute($raw, 'comments', 'array', true))
+			throw new Exception("Comments array required", 400);
+
+		$user = $this->authorization();
+
+		if(!$return = $_->add_comments($user, $comments))
+			throw new Exception("Comments array wrong format", 400);
+
+		return array('comments' => $return);
 	}
 
 	protected function authorization($required = true) {
@@ -262,6 +283,7 @@ class API {
 			'_add_views' => '^/views/add/?$',
 			'_add_items' => '^/items/add/?$',
 			'_add_user' => '^/users/add/?$',
+ 			'_add_comments' => '^/comments/add/?$',
 		)
 	);
 

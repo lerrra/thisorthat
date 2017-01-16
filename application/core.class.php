@@ -69,9 +69,24 @@ class Core {
 		try{
 			$db = $this->_db;
 
-			$data['user'] = (int)$user;
+			$data['user'] = (int) $user;
 
-			$query  = "INSERT INTO item (user, left_text, right_text, paid, approve, reason, created, added) VALUES (:user, :left_text, :right_text, :paid, :approve, :reason, NOW(), NOW());";
+			$query  = "INSERT INTO item (user, left_text, right_text, paid, approve, reason, created, added) VALUES (:user, :left_text, :right_text, :paid, :approve, :reason, NOW(), NOW())";
+
+			return (int)$db->lastid($query, $data);
+		}
+		catch(DBException $e) {
+			throw new CoreException($e->getMessage(), 0);
+		}
+	}
+
+ 	private function _add_new_comment($user, $data) {
+		try{
+			$db = $this->_db;
+
+			$data['user'] = (int) $user;
+
+			$query  = "INSERT INTO comment (user, item, text, parent, created) VALUES (:user, :item, :text, :parent, NOW())";
 
 			return (int)$db->lastid($query, $data);
 		}
@@ -279,6 +294,35 @@ class Core {
 			$valid = $this->_check_question($valid);
 
 			$return[] = $this->_add_new_question($user, $valid);
+		}
+
+		if(empty($return))
+			return false;
+
+		return $return;
+	}
+
+ 	public function add_comments($user, $data) {
+		$valid = array('text' => '', 'item' => '', 'parent' => 0);
+
+		$return = array();
+
+		foreach($data as $array) {
+			if(!is_array($array))
+				continue;
+
+			foreach($array as $key => $value) {
+
+				$valid[$key] = $value;
+
+				if($key !== 'text')
+                    continue;
+
+ 				if(mb_strlen($value, 'UTF-8') < 1 || mb_strlen($value, 'UTF-8') > 1000)
+					return false;
+			}
+
+    		$return[] = $this->_add_new_comment($user, $valid);
 		}
 
 		if(empty($return))
