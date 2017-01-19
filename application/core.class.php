@@ -316,13 +316,13 @@ class Core {
 				$valid[$key] = $value;
 
 				if($key !== 'text')
-                    continue;
+					continue;
 
  				if(mb_strlen($value, 'UTF-8') < 1 || mb_strlen($value, 'UTF-8') > 1000)
 					return false;
 			}
 
-    		$return[] = $this->_add_new_comment($user, $valid);
+			$return[] = $this->_add_new_comment($user, $valid);
 		}
 
 		if(empty($return))
@@ -332,7 +332,7 @@ class Core {
 	}
 
 	public function add_views($user, $data) {
-        $valid = array('left', 'right', 'skip');
+		$valid = array('left', 'right', 'skip');
 
 		foreach($data as $id => $vote)
 			if(!in_array($vote, $valid))
