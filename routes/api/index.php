@@ -189,6 +189,45 @@ class API {
 		return array('comments' => $return);
 	}
 
+  	/**
+	 * Request: /favorite/self
+	 * Method: GET
+	 * Answer: [favorite] => %array
+	**/
+	private function _self_favorite($atts) {
+		$_ = $this->_core;
+
+		$user = $this->authorization();
+
+		if($items = $_->self_favorite($user))
+			return $favorite;
+
+		throw new Exception("Something went wrong", 400);
+	}
+
+	/**
+	 * Request: /favorite/add/
+	 * Method: POST
+	 * Data: [favorite] => %array
+	 * Answer: [status] => %i, [description] => %s
+	**/
+	private function _add_favorite($atts) {
+		$_ = $this->_core;
+
+		$raw = $_->dataset();
+
+		if(!$favorite = $_->attribute($raw, 'favorite', 'array', true))
+			throw new Exception("Favorite array required", 400);
+
+		$user = $this->authorization();
+
+		if(!$return = $_->add_favorite($user, $favorite))
+			throw new Exception("Favorite array wrong format", 400);
+
+		return array('favorite' => $return);
+	}
+
+
 	protected function authorization($required = true) {
 		$_ = $this->_core;
 
@@ -277,6 +316,7 @@ class API {
  			'_show_items' => '^/items/show/[\d,]+/?',
   			'_self_items' => '^/items/self/?',
 			'_show_comments' => '^/comments/show/[\d]+/?',
+			'_self_favorite' => '^/favorite/self/?',
 		),
 		'POST' => array(
 			'_add_error' => '^/items/error/?$',
@@ -284,6 +324,7 @@ class API {
 			'_add_items' => '^/items/add/?$',
 			'_add_user' => '^/users/add/?$',
  			'_add_comments' => '^/comments/add/?$',
+			'_add_favorite' => '^/favorite/add/?$',
 		)
 	);
 

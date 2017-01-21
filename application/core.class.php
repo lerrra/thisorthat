@@ -95,47 +95,6 @@ class Core {
 		}
 	}
 
-	private function _self_items($user) {
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT id FROM item WHERE user = ?";
-
-			$items = $db->select($query, array((int)$user));
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-
-		$items = $this->_normilize_array($items);
-
-		return array("items" => array_keys($items));
-	}
-
-	private function _show_items($ids) {
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT item.id, left_text, right_text, approve, reason, IFNULL(v.left_vote, 0) left_vote, IFNULL(v.right_vote, 0) right_vote
-				FROM item
-				LEFT OUTER JOIN
-				(
-					SELECT item, SUM(vote = 'left') left_vote, SUM(vote = 'right') right_vote
-					FROM view
-					WHERE item IN (" . implode(",", $ids) . ")
-					GROUP BY item
-				) AS v ON (v.item = id)
-				WHERE item.id IN (" . implode(",", $ids) . ")";
-
-			$items = $db->select($query);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-
-		return $this->_normilize_array($items);
-	}
-
 	private function _get_random_items($count) {
 		try{
 			$db = $this->_db;
@@ -191,21 +150,6 @@ class Core {
 		return $this->_normilize_array($items);
 	}
 
-	private function _show_comments($item) {
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT id, item, user, `text`, parent FROM comment WHERE item = ?";
-
-			$comments = $db->select($query, array((int) $item));
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-
-		return $this->_normilize_array($comments);
-	}
-
 	private function _add_new_user($data) {
 		try{
 			$db = $this->_db;
@@ -254,15 +198,76 @@ class Core {
 		$ids = array_slice($ids, 0, 20);
 		$ids = array_filter($ids, 'is_numeric');
 
-		return $this->_show_items($ids);
+		try{
+			$db = $this->_db;
+
+			$query = "SELECT item.id, left_text, right_text, approve, reason, IFNULL(v.left_vote, 0) left_vote, IFNULL(v.right_vote, 0) right_vote
+				FROM item
+				LEFT OUTER JOIN
+				(
+					SELECT item, SUM(vote = 'left') left_vote, SUM(vote = 'right') right_vote
+					FROM view
+					WHERE item IN (" . implode(",", $ids) . ")
+					GROUP BY item
+				) AS v ON (v.item = id)
+				WHERE item.id IN (" . implode(",", $ids) . ")";
+
+			$items = $db->select($query);
+		}
+		catch(DBException $e) {
+			throw new CoreException($e->getMessage(), 0);
+		}
+
+		return $this->_normilize_array($items);
 	}
 
  	public function show_comments($user, $item) {
-		return $this->_show_comments($item);
+		try{
+			$db = $this->_db;
+
+			$query = "SELECT id, item, user, `text`, parent FROM comment WHERE item = ?";
+
+			$comments = $db->select($query, array((int) $item));
+		}
+		catch(DBException $e) {
+			throw new CoreException($e->getMessage(), 0);
+		}
+
+		return $this->_normilize_array($comments);
 	}
 
  	public function self_items($user) {
-		return $this->_self_items($user);
+		try{
+			$db = $this->_db;
+
+			$query = "SELECT id FROM item WHERE user = ?";
+
+			$items = $db->select($query, array((int)$user));
+		}
+		catch(DBException $e) {
+			throw new CoreException($e->getMessage(), 0);
+		}
+
+		$items = $this->_normilize_array($items);
+
+		return array("items" => array_keys($items));
+	}
+
+	public function self_favorite($user) {
+		try{
+			$db = $this->_db;
+
+			$query = "SELECT item FROM favorite WHERE user = ?";
+
+			$items = $db->select($query, array((int)$user));
+		}
+		catch(DBException $e) {
+			throw new CoreException($e->getMessage(), 0);
+		}
+
+		$favorite = $this->_normilize_array($favorite);
+
+		return array("favorite" => array_keys($favorite));
 	}
 
 	public function add_items($user, $data, $client = null) {
@@ -329,6 +334,22 @@ class Core {
 			return false;
 
 		return $return;
+	}
+
+  	public function add_favorite($user, $data) {
+		try{
+			$db = $this->_db;
+
+// 			foreach($items as $id => $vote)
+//				$data[] = array('item' => (int)$id, 'user' => (int)$user, 'vote' => $vote);
+
+//			$query  = "INSERT IGNORE INTO view (user, item, vote) VALUES (:user, :item, :vote);";
+
+			return $db->multiple($query, $data);
+		}
+		catch(DBException $e) {
+			throw new CoreException($e->getMessage(), 0);
+		}
 	}
 
 	public function add_views($user, $data) {
