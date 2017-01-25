@@ -190,7 +190,7 @@ class API {
 	}
 
   	/**
-	 * Request: /favorite/self
+	 * Request: /favorite/self/
 	 * Method: GET
 	 * Answer: [favorite] => %array
 	**/
@@ -199,7 +199,7 @@ class API {
 
 		$user = $this->authorization();
 
-		if($items = $_->self_favorite($user))
+		if($favorite = $_->self_favorite($user))
 			return $favorite;
 
 		throw new Exception("Something went wrong", 400);
@@ -208,7 +208,7 @@ class API {
 	/**
 	 * Request: /favorite/add/
 	 * Method: POST
-	 * Data: [favorite] => %array
+	 * Data: [favorite] => %i
 	 * Answer: [status] => %i, [description] => %s
 	**/
 	private function _add_favorite($atts) {
@@ -216,17 +216,38 @@ class API {
 
 		$raw = $_->dataset();
 
-		if(!$favorite = $_->attribute($raw, 'favorite', 'array', true))
-			throw new Exception("Favorite array required", 400);
+		if(!$favorite = $_->attribute($raw, 'favorite', '^[\d]+$'))
+			throw new Exception("Item ID required", 400);
 
 		$user = $this->authorization();
 
 		if(!$return = $_->add_favorite($user, $favorite))
-			throw new Exception("Favorite array wrong format", 400);
+			throw new Exception("Item ID wrong format", 400);
 
-		return array('favorite' => $return);
+		return $this->success("Completed successfully", 202);
 	}
 
+ 	/**
+	 * Request: /favorite/delete/
+	 * Method: DELETE
+	 * Data: [favorite] => %i
+	 * Answer: [status] => %i, [description] => %s
+	**/
+	public function _delete_favorite($atts) {
+ 		$_ = $this->_core;
+
+		$raw = $_->dataset();
+
+		if(!$item = $_->attribute($raw, 'favorite', '^[\d]+$'))
+			throw new Exception("Item ID required", 400);
+
+		$user = $this->authorization();
+
+		if(!$return = $_->delete_favorite($user, $item))
+			throw new Exception("Item ID wrong format", 400);
+
+		return $this->success("Completed successfully", 202);
+	}
 
 	protected function authorization($required = true) {
 		$_ = $this->_core;
@@ -325,6 +346,9 @@ class API {
 			'_add_user' => '^/users/add/?$',
  			'_add_comments' => '^/comments/add/?$',
 			'_add_favorite' => '^/favorite/add/?$',
+		),
+		'DELETE' => array(
+			'_delete_favorite' => '^/favorite/delete/?$'
 		)
 	);
 

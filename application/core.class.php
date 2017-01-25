@@ -259,7 +259,7 @@ class Core {
 
 			$query = "SELECT item FROM favorite WHERE user = ?";
 
-			$items = $db->select($query, array((int)$user));
+			$favorite = $db->select($query, array((int)$user));
 		}
 		catch(DBException $e) {
 			throw new CoreException($e->getMessage(), 0);
@@ -336,16 +336,30 @@ class Core {
 		return $return;
 	}
 
-  	public function add_favorite($user, $data) {
+  	public function add_favorite($user, $item) {
 		try{
 			$db = $this->_db;
 
-// 			foreach($items as $id => $vote)
-//				$data[] = array('item' => (int)$id, 'user' => (int)$user, 'vote' => $vote);
+			$data = array('user' => (int) $user, 'item' => (int) $item);
 
-//			$query  = "INSERT IGNORE INTO view (user, item, vote) VALUES (:user, :item, :vote);";
+			$query  = "INSERT IGNORE INTO favorite (user, item) VALUES (:user, :item)";
 
-			return $db->multiple($query, $data);
+			return $db->query($query, $data);
+		}
+		catch(DBException $e) {
+			throw new CoreException($e->getMessage(), 0);
+		}
+	}
+
+	public function delete_favorite($user, $item) {
+		try{
+			$db = $this->_db;
+
+			$data = array('user' => (int) $user, 'item' => (int) $item);
+
+			$query  = "DELETE FROM favorite WHERE user = :user AND item = :item";
+
+			return $db->query($query, $data);
 		}
 		catch(DBException $e) {
 			throw new CoreException($e->getMessage(), 0);
