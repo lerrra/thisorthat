@@ -216,12 +216,12 @@ class API {
 
 		$raw = $_->dataset();
 
-		if(!$favorite = $_->attribute($raw, 'favorite', '^[\d]+$'))
+		if(!$item = $_->attribute($raw, 'favorite', '^[\d]+$'))
 			throw new Exception("Item ID required", 400);
 
 		$user = $this->authorization();
 
-		if(!$return = $_->add_favorite($user, $favorite))
+		if(!$return = $_->add_favorite($user, $item))
 			throw new Exception("Item ID wrong format", 400);
 
 		return $this->success("Completed successfully", 202);
@@ -245,6 +245,28 @@ class API {
 
 		if(!$return = $_->delete_favorite($user, $item))
 			throw new Exception("Item ID wrong format", 400);
+
+		return $this->success("Completed successfully", 202);
+	}
+
+ 	/**
+	 * Request: /abuse/add/
+	 * Method: POST
+	 * Data: [abuse] => %array
+	 * Answer: [status] => %i, [description] => %s
+	**/
+	private function _add_abuse($atts) {
+ 		$_ = $this->_core;
+
+		$raw = $_->dataset();
+
+		if(!$abuse = $_->attribute($raw, 'abuse', 'array', true))
+			throw new Exception("Abuse array required", 400);
+
+		$user = $this->authorization();
+
+		if(!$_->add_abuse($user, $abuse))
+			throw new Exception("Abuse array required", 400);
 
 		return $this->success("Completed successfully", 202);
 	}
@@ -346,9 +368,10 @@ class API {
 			'_add_user' => '^/users/add/?$',
  			'_add_comments' => '^/comments/add/?$',
 			'_add_favorite' => '^/favorite/add/?$',
+			'_add_abuse' => '^/abuse/add/?$',
 		),
 		'DELETE' => array(
-			'_delete_favorite' => '^/favorite/delete/?$'
+			'_delete_favorite' => '^/favorite/delete/?$',
 		)
 	);
 

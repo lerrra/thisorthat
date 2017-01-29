@@ -44,6 +44,22 @@ class Core {
 		}
 	}
 
+ 	private function _set_abused($user, $items) {
+		try{
+			$db = $this->_db;
+
+ 			foreach($items as $id => $type)
+				$data[] = array('item' => (int) $id, 'user' => (int) $user, 'type' => $type);
+
+			$query  = "INSERT IGNORE INTO abuse (user, item, type) VALUES (:user, :item, :type);";
+
+			return $db->multiple($query, $data);
+		}
+		catch(DBException $e) {
+			throw new CoreException($e->getMessage(), 0);
+		}
+	}
+
 	private function _check_question($valid) {
 		try{
 			$db = $this->_db;
@@ -374,6 +390,16 @@ class Core {
 				unset($data[$id]);
 
  		return $this->_set_viewed($user, $data);
+	}
+
+	public function add_abuse($user, $data) {
+		$valid = array('typo', 'censorship', 'clone');
+
+		foreach($data as $id => $vote)
+			if(!in_array($vote, $valid))
+				unset($data[$id]);
+
+ 		return $this->_set_abused($user, $data);
 	}
 
 	public function authenticate($user, $password) {
