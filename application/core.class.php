@@ -9,466 +9,468 @@
 
 
 if (!class_exists('db'))
-	require_once ABSPATH . $config['paths']['db'];
+    require_once ABSPATH . $config['paths']['db'];
 
 class Core {
 
-	protected $_db = null;
+    protected $_db = null;
 
-	function __construct($config) {
-		$this->_db = new DB($config['db']);
-	}
+    function __construct($config) {
+        $this->_db = new DB($config['db']);
+    }
 
-	private function _normilize_array($in, $out = array()) {
-		foreach($in as $k => $v) {
-			$id = array_shift($v);
-			$out[$id] = $v;
-		}
-
-		return $out;
-	}
-
-	private function _set_viewed($user, $items) {
-		try{
-			$db = $this->_db;
-
- 			foreach($items as $id => $vote)
-				$data[] = array('item' => (int)$id, 'user' => (int)$user, 'vote' => $vote);
-
-			$query  = "INSERT IGNORE INTO view (user, item, vote) VALUES (:user, :item, :vote);";
-
-			return $db->multiple($query, $data);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-	}
-
- 	private function _set_abused($user, $items) {
-		try{
-			$db = $this->_db;
-
- 			foreach($items as $id => $type)
-				$data[] = array('item' => (int) $id, 'user' => (int) $user, 'type' => $type);
-
-			$query  = "INSERT IGNORE INTO abuse (user, item, type) VALUES (:user, :item, :type);";
-
-			return $db->multiple($query, $data);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-	}
-
-	private function _check_question($valid) {
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT id FROM item WHERE (left_text = :left_text AND right_text = :right_text) OR (right_text = :left_text AND left_text = :right_text)  LIMIT 1";
-			$items = $db->select($query, array_slice($valid, 0, 2));
-
-			if(count($items) > 0)
-				return array_merge($valid, array('approve' => 2, 'reason' => 'Подобный вопрос уже есть в нашей базе'));
-
-			if(Text_Censure::parse("{$valid['left_text']} {$valid['right_text']}") !== false)
-				return array_merge($valid, array('approve' => 2, 'reason' => 'Наш робот решил, что в вопросе используется обсценная лексика'));
-
-			return array_merge($valid, array('approve' => 0, 'reason' => ''));
-
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-	}
-
-	private function _add_new_question($user, $data) {
-		try{
-			$db = $this->_db;
-
-			$data['user'] = (int) $user;
-
-			$query  = "INSERT INTO item (user, left_text, right_text, paid, approve, reason, created, added) VALUES (:user, :left_text, :right_text, :paid, :approve, :reason, NOW(), NOW())";
-
-			return (int)$db->lastid($query, $data);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-	}
-
- 	private function _add_new_comment($user, $data) {
-		try{
-			$db = $this->_db;
-
-			$data['user'] = (int) $user;
-
-			$query  = "INSERT INTO comment (user, item, text, parent, created) VALUES (:user, :item, :text, :parent, NOW())";
-
-			return (int)$db->lastid($query, $data);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-	}
-
-	private function _get_random_items($count) {
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT it.id, it.left_text, it.right_text, it.approve as moderate,
-				IFNULL(SUM(vote = 'left'), 0) left_vote,
-				IFNULL(SUM(vote = 'right'), 0) right_vote
-				FROM (
-					SELECT id, left_text, right_text, approve
-					FROM item
-					WHERE approve != 2
-					ORDER BY RAND() LIMIT " . (int)$count. "
-				) AS it
-				LEFT JOIN view ON it.id = view.item
-				GROUP BY it.id
-				ORDER BY RAND()";
-
-			$items = $db->select($query);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-
-		return $this->_normilize_array($items);
-	}
-
- 	private function _get_user_items($user, $count) {
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT it.id, it.left_text, it.right_text, it.approve as moderate,
-				IFNULL(SUM(vote = 'left'), 0) left_vote,
-				IFNULL(SUM(vote = 'right'), 0) right_vote
-				FROM (
-					SELECT iv.id, iv.left_text, iv.right_text, iv.approve
-					FROM item AS iv
-					LEFT JOIN view AS vi
-					ON (iv.id = vi.item AND vi.user = ?)
-					WHERE (vi.id IS NULL AND iv.approve != 2)
-					ORDER BY RAND() LIMIT " . (int) $count. "
-				) AS it
-
-				LEFT JOIN view ON it.id = view.item
-				GROUP BY it.id
-				ORDER BY RAND()";
-
-			$items = $db->select($query, array((int) $user));
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-
-		return $this->_normilize_array($items);
-	}
-
-	private function _add_new_user($data) {
-		try{
-			$db = $this->_db;
-
-			$query = "INSERT INTO user (secret, client, `unique`) VALUES (:secret, :client, :unique)";
-
-			return $db->lastid($query, $data);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-	}
-
-	private function _check_user_secret($user, $secret) {
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT id FROM user WHERE id = ? AND secret = ? LIMIT 1";
-			$count = $db->num_rows($query, array((int)$user, $secret));
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-
-		return $count > 0;
-	}
-
-	private function _get_secret($token) {
-		try{
-			return substr(hash('sha256', $token), 10, 32);
-		}
-		catch(Exception $e) {
-			throw new CoreException("function not found", 1);
-		}
-	}
-
-	public function get_items($user = false, $count = 10) {
-		if(false === $user)
-			return $this->_get_random_items($count);
-
-		return $this->_get_user_items($user, $count);
-	}
-
-	public function show_items($user, $items) {
-		$ids = array_unique(explode(",", $items));
-		$ids = array_slice($ids, 0, 20);
-		$ids = array_filter($ids, 'is_numeric');
-
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT item.id, left_text, right_text, approve, reason, IFNULL(v.left_vote, 0) left_vote, IFNULL(v.right_vote, 0) right_vote
-				FROM item
-				LEFT OUTER JOIN
-				(
-					SELECT item, SUM(vote = 'left') left_vote, SUM(vote = 'right') right_vote
-					FROM view
-					WHERE item IN (" . implode(",", $ids) . ")
-					GROUP BY item
-				) AS v ON (v.item = id)
-				WHERE item.id IN (" . implode(",", $ids) . ")";
-
-			$items = $db->select($query);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-
-		return $this->_normilize_array($items);
-	}
-
- 	public function show_comments($user, $item) {
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT id, item, user, `text`, parent FROM comment WHERE item = ?";
-
-			$comments = $db->select($query, array((int) $item));
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-
-		return $this->_normilize_array($comments);
-	}
-
- 	public function self_items($user) {
-		try{
-			$db = $this->_db;
-
-			$query = "SELECT id FROM item WHERE user = ?";
+    private function _normilize_array($in, $out = array()) {
+        foreach($in as $k => $v) {
+            $id = array_shift($v);
+            $out[$id] = $v;
+        }
+
+        return $out;
+    }
+
+    private function _set_viewed($user, $items) {
+        try{
+            $db = $this->_db;
+
+             foreach($items as $id => $vote)
+                $data[] = array('item' => (int)$id, 'user' => (int)$user, 'vote' => $vote);
+
+            $query  = "INSERT IGNORE INTO view (user, item, vote) VALUES (:user, :item, :vote);";
+
+            return $db->multiple($query, $data);
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+    }
+
+     private function _set_abused($user, $items) {
+        try{
+            $db = $this->_db;
+
+             foreach($items as $id => $type)
+                $data[] = array('item' => (int) $id, 'user' => (int) $user, 'type' => $type);
+
+            $query  = "INSERT IGNORE INTO abuse (user, item, type) VALUES (:user, :item, :type);";
+
+            return $db->multiple($query, $data);
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+    }
+
+    private function _check_question($valid) {
+        try{
+            $db = $this->_db;
+
+            $query = "SELECT id FROM item WHERE (left_text = :left_text AND right_text = :right_text) OR (right_text = :left_text AND left_text = :right_text)  LIMIT 1";
+            $items = $db->select($query, array_slice($valid, 0, 2));
+
+            if(count($items) > 0)
+                return array_merge($valid, array('approve' => 2, 'reason' => 'Подобный вопрос уже есть в нашей базе'));
+
+            if(Text_Censure::parse("{$valid['left_text']} {$valid['right_text']}") !== false)
+                return array_merge($valid, array('approve' => 2, 'reason' => 'Наш робот решил, что в вопросе используется обсценная лексика'));
+
+            return array_merge($valid, array('approve' => 0, 'reason' => ''));
+
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+    }
+
+    private function _add_new_question($user, $data) {
+        try{
+            $db = $this->_db;
+
+            $data['user'] = (int) $user;
+
+            $query  = "INSERT INTO item (user, left_text, right_text, paid, approve, reason, created, added) VALUES (:user, :left_text, :right_text, :paid, :approve, :reason, NOW(), NOW())";
+
+            return (int)$db->lastid($query, $data);
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+    }
+
+     private function _add_new_comment($user, $data) {
+        try{
+            $db = $this->_db;
+
+            $data['user'] = (int) $user;
+
+            $query  = "INSERT INTO comment (user, item, text, parent, created) VALUES (:user, :item, :text, :parent, NOW())";
+
+            return (int)$db->lastid($query, $data);
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+    }
+
+    private function _get_random_items($count) {
+        try{
+            $db = $this->_db;
+
+            $query = "SELECT it.id, it.left_text, it.right_text, it.approve as moderate,
+                IFNULL(SUM(vote = 'left'), 0) left_vote,
+                IFNULL(SUM(vote = 'right'), 0) right_vote
+                FROM (
+                    SELECT id, left_text, right_text, approve
+                    FROM item
+                    WHERE approve != 2
+                    ORDER BY RAND() LIMIT " . (int)$count. "
+                ) AS it
+                LEFT JOIN view ON it.id = view.item
+                GROUP BY it.id
+                ORDER BY RAND()";
+
+            $items = $db->select($query);
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+
+        return $this->_normilize_array($items);
+    }
+
+     private function _get_user_items($user, $count) {
+        try{
+            $db = $this->_db;
+
+            $query = "SELECT it.id, it.left_text, it.right_text, it.approve as moderate,
+                IFNULL(SUM(vote = 'left'), 0) left_vote,
+                IFNULL(SUM(vote = 'right'), 0) right_vote
+                FROM (
+                    SELECT iv.id, iv.left_text, iv.right_text, iv.approve
+                    FROM item AS iv
+                    LEFT JOIN view AS vi
+                    ON (iv.id = vi.item AND vi.user = ?)
+                    WHERE (vi.id IS NULL AND iv.approve != 2)
+                    ORDER BY RAND() LIMIT " . (int) $count. "
+                ) AS it
+
+                LEFT JOIN view ON it.id = view.item
+                GROUP BY it.id
+                ORDER BY RAND()";
+
+            $items = $db->select($query, array((int) $user));
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+
+        return $this->_normilize_array($items);
+    }
+
+    private function _add_new_user($data) {
+        try{
+            $db = $this->_db;
+
+            $query = "INSERT INTO user (secret, client, `unique`) VALUES (:secret, :client, :unique)";
+
+            return $db->lastid($query, $data);
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+    }
+
+    private function _check_user_secret($user, $secret) {
+        try{
+            $db = $this->_db;
+
+            $query = "SELECT id FROM user WHERE id = ? AND secret = ? LIMIT 1";
+            $count = $db->num_rows($query, array((int)$user, $secret));
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+
+        return $count > 0;
+    }
+
+    private function _get_secret($token) {
+        try{
+            return substr(hash('sha256', $token), 10, 32);
+        }
+        catch(Exception $e) {
+            throw new CoreException("function not found", 1);
+        }
+    }
+
+    public function get_items($user = false, $count = 10) {
+        if(false === $user)
+            return $this->_get_random_items($count);
+
+        return $this->_get_user_items($user, $count);
+    }
+
+    public function show_items($user, $items) {
+        $ids = array_unique(explode(",", $items));
+        $ids = array_slice($ids, 0, 20);
+        $ids = array_filter($ids, 'is_numeric');
+
+        try{
+            $db = $this->_db;
+
+            $query = "SELECT item.id, left_text, right_text, approve, reason, IFNULL(v.left_vote, 0) left_vote, IFNULL(v.right_vote, 0) right_vote
+                FROM item
+                LEFT OUTER JOIN
+                (
+                    SELECT item, SUM(vote = 'left') left_vote, SUM(vote = 'right') right_vote
+                    FROM view
+                    WHERE item IN (" . implode(",", $ids) . ")
+                    GROUP BY item
+                ) AS v ON (v.item = id)
+                WHERE item.id IN (" . implode(",", $ids) . ")";
+
+            $items = $db->select($query);
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+
+        $items = $this->_normilize_array($items);
+
+        return array_replace(array_flip($ids), $items);
+    }
+
+     public function show_comments($user, $item) {
+        try{
+            $db = $this->_db;
+
+            $query = "SELECT id, item, user, `text`, parent FROM comment WHERE item = ?";
+
+            $comments = $db->select($query, array((int) $item));
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+
+        return $this->_normilize_array($comments);
+    }
 
-			$items = $db->select($query, array((int)$user));
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
+     public function self_items($user) {
+        try{
+            $db = $this->_db;
 
-		$items = $this->_normilize_array($items);
+            $query = "SELECT id FROM item WHERE user = ?";
 
-		return array("items" => array_keys($items));
-	}
+            $items = $db->select($query, array((int)$user));
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
 
-	public function self_favorite($user) {
-		try{
-			$db = $this->_db;
+        $items = $this->_normilize_array($items);
 
-			$query = "SELECT item FROM favorite WHERE user = ?";
+        return array("items" => array_keys($items));
+    }
 
-			$favorite = $db->select($query, array((int)$user));
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
+    public function self_favorite($user) {
+        try{
+            $db = $this->_db;
 
-		$favorite = $this->_normilize_array($favorite);
+            $query = "SELECT item FROM favorite WHERE user = ? ORDER BY id";
 
-		return array("favorite" => array_keys($favorite));
-	}
+            $favorite = $db->select($query, array((int)$user));
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
 
-	public function add_items($user, $data, $client = null) {
-		$valid = array('left_text' => '', 'right_text' => '', 'paid' => 0);
+        $favorite = $this->_normilize_array($favorite);
 
-		$return = array();
+        return array("favorite" => array_keys($favorite));
+    }
 
-		foreach($data as $array) {
-			if(!is_array($array))
-				continue;
+    public function add_items($user, $data, $client = null) {
+        $valid = array('left_text' => '', 'right_text' => '', 'paid' => 0);
 
-			foreach($array as $key => $q) {
+        $return = array();
 
-				if(!array_key_exists($key, $valid))
-					return false;
+        foreach($data as $array) {
+            if(!is_array($array))
+                continue;
 
-				if($key === 'paid') {
-					$valid[$key] = (int)$q;
+            foreach($array as $key => $q) {
 
-					continue;
-				}
+                if(!array_key_exists($key, $valid))
+                    return false;
 
-				if(mb_strlen($q, 'UTF-8') < 4 || mb_strlen($q, 'UTF-8') > 150)
-					return false;
+                if($key === 'paid') {
+                    $valid[$key] = (int)$q;
 
-				$valid[$key] = $q;
-			}
+                    continue;
+                }
 
-			$valid = $this->_check_question($valid);
+                if(mb_strlen($q, 'UTF-8') < 4 || mb_strlen($q, 'UTF-8') > 150)
+                    return false;
 
-			$return[] = $this->_add_new_question($user, $valid);
-		}
+                $valid[$key] = $q;
+            }
 
-		if(empty($return))
-			return false;
+            $valid = $this->_check_question($valid);
 
-		return $return;
-	}
+            $return[] = $this->_add_new_question($user, $valid);
+        }
 
- 	public function add_comments($user, $data) {
-		$valid = array('text' => '', 'item' => '', 'parent' => 0);
+        if(empty($return))
+            return false;
 
-		$return = array();
+        return $return;
+    }
 
-		foreach($data as $array) {
-			if(!is_array($array))
-				continue;
+     public function add_comments($user, $data) {
+        $valid = array('text' => '', 'item' => '', 'parent' => 0);
 
-			foreach($array as $key => $value) {
+        $return = array();
 
-				$valid[$key] = $value;
+        foreach($data as $array) {
+            if(!is_array($array))
+                continue;
 
-				if($key !== 'text')
-					continue;
+            foreach($array as $key => $value) {
 
- 				if(mb_strlen($value, 'UTF-8') < 1 || mb_strlen($value, 'UTF-8') > 1000)
-					return false;
-			}
+                $valid[$key] = $value;
 
-			$return[] = $this->_add_new_comment($user, $valid);
-		}
+                if($key !== 'text')
+                    continue;
 
-		if(empty($return))
-			return false;
+                 if(mb_strlen($value, 'UTF-8') < 1 || mb_strlen($value, 'UTF-8') > 1000)
+                    return false;
+            }
 
-		return $return;
-	}
+            $return[] = $this->_add_new_comment($user, $valid);
+        }
 
-  	public function add_favorite($user, $item) {
-		try{
-			$db = $this->_db;
+        if(empty($return))
+            return false;
 
-			$data = array('user' => (int) $user, 'item' => (int) $item);
+        return $return;
+    }
 
-			$query  = "INSERT IGNORE INTO favorite (user, item) VALUES (:user, :item)";
+      public function add_favorite($user, $item) {
+        try{
+            $db = $this->_db;
 
-			return $db->query($query, $data);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-	}
+            $data = array('user' => (int) $user, 'item' => (int) $item);
 
-	public function delete_favorite($user, $item) {
-		try{
-			$db = $this->_db;
+            $query  = "INSERT IGNORE INTO favorite (user, item) VALUES (:user, :item)";
 
-			$data = array('user' => (int) $user, 'item' => (int) $item);
+            return $db->query($query, $data);
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+    }
 
-			$query  = "DELETE FROM favorite WHERE user = :user AND item = :item";
+    public function delete_favorite($user, $item) {
+        try{
+            $db = $this->_db;
 
-			return $db->query($query, $data);
-		}
-		catch(DBException $e) {
-			throw new CoreException($e->getMessage(), 0);
-		}
-	}
+            $data = array('user' => (int) $user, 'item' => (int) $item);
 
-	public function add_views($user, $data) {
-		$valid = array('left', 'right', 'skip');
+            $query  = "DELETE FROM favorite WHERE user = :user AND item = :item";
 
-		foreach($data as $id => $vote)
-			if(!in_array($vote, $valid))
-				unset($data[$id]);
+            return $db->query($query, $data);
+        }
+        catch(DBException $e) {
+            throw new CoreException($e->getMessage(), 0);
+        }
+    }
 
- 		return $this->_set_viewed($user, $data);
-	}
+    public function add_views($user, $data) {
+        $valid = array('left', 'right', 'skip');
 
-	public function add_abuse($user, $data) {
-		$valid = array('typo', 'censorship', 'clone');
+        foreach($data as $id => $vote)
+            if(!in_array($vote, $valid))
+                unset($data[$id]);
 
-		foreach($data as $id => $vote)
-			if(!in_array($vote, $valid))
-				unset($data[$id]);
+         return $this->_set_viewed($user, $data);
+    }
 
- 		return $this->_set_abused($user, $data);
-	}
+    public function add_abuse($user, $data) {
+        $valid = array('typo', 'censorship', 'clone');
 
-	public function authenticate($user, $password) {
-		$secret = $this->_get_secret($password);
+        foreach($data as $id => $vote)
+            if(!in_array($vote, $valid))
+                unset($data[$id]);
 
-		return $this->_check_user_secret($user, $secret);
-	}
+         return $this->_set_abused($user, $data);
+    }
 
-	public function register($client, $unique) {
-		$token = md5(uniqid(rand(), true));
+    public function authenticate($user, $password) {
+        $secret = $this->_get_secret($password);
 
-		$data = array (
-			'secret' => $this->_get_secret($token),
-			'unique' => $unique,
-			'client' => $client
-		);
+        return $this->_check_user_secret($user, $secret);
+    }
 
-		$user = $this->_add_new_user($data);
+    public function register($client, $unique) {
+        $token = md5(uniqid(rand(), true));
 
-		return array('user' => $user, 'token' => $token);
-	}
+        $data = array (
+            'secret' => $this->_get_secret($token),
+            'unique' => $unique,
+            'client' => $client
+        );
 
-	public function attribute($list, $offset, $regex, $type = false) {
-		if(!isset($list[$offset]))
-			return false;
+        $user = $this->_add_new_user($data);
 
-		if(true === $type && gettype($list[$offset]) !== $regex)
-			return false;
+        return array('user' => $user, 'token' => $token);
+    }
 
-		if(true === $type)
-			return $list[$offset];
+    public function attribute($list, $offset, $regex, $type = false) {
+        if(!isset($list[$offset]))
+            return false;
 
-		if(!preg_match("/{$regex}/i", $list[$offset]))
-			return false;
+        if(true === $type && gettype($list[$offset]) !== $regex)
+            return false;
 
-		return $list[$offset];
-	}
+        if(true === $type)
+            return $list[$offset];
 
-	public function dataset() {
-		$raw = file_get_contents("php://input");
+        if(!preg_match("/{$regex}/i", $list[$offset]))
+            return false;
 
-		return json_decode($raw, true);
-	}
+        return $list[$offset];
+    }
+
+    public function dataset() {
+        $raw = file_get_contents("php://input");
+
+        return json_decode($raw, true);
+    }
 }
 
 class CoreException extends Exception {
 
-	protected $message;
-	protected $code;
-	protected $case;
+    protected $message;
+    protected $code;
+    protected $case;
 
-	public function __construct($message, $code = 0, Exception $previous = null) {
+    public function __construct($message, $code = 0, Exception $previous = null) {
 
-		$this->case = array(
-			0 => "Database error: can't process ",
-			1 => "Internal server error: "
-		);
+        $this->case = array(
+            0 => "Database error: can't process ",
+            1 => "Internal server error: "
+        );
 
-		$this->message = $message;
-		$this->code = $code;
+        $this->message = $message;
+        $this->code = $code;
 
-		parent::__construct($message, $code, $previous);
+        parent::__construct($message, $code, $previous);
 
-	}
+    }
 
-	public function getDescription(){
-		$code = $this->code;
-		$case = $this->case;
+    public function getDescription(){
+        $code = $this->code;
+        $case = $this->case;
 
-		return isset($case[$code]) ? $case[$code] . $this->message : $this->message;
-	}
+        return isset($case[$code]) ? $case[$code] . $this->message : $this->message;
+    }
 }
