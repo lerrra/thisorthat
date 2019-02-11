@@ -236,7 +236,14 @@ class Core {
 
         $items = $this->_normilize_array($items);
 
-        return array_replace(array_flip($ids), $items);
+        $array = [];
+        foreach($ids as $id) {
+            if(array_key_exists($id, $items)) {
+                $array[$id] = $items[$id];
+            }
+        }
+
+        return $array;
     }
 
      public function show_comments($user, $item) {
